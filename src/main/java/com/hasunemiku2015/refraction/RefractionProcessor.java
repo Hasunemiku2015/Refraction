@@ -170,17 +170,13 @@ public class RefractionProcessor extends AbstractProcessor {
         List<String> methodParamNames = new ArrayList<>();
         for (int i=0; i<element.getParameters().size(); i++){
             ParameterSpec param = getInputParams(element).get(i);
-            try{
-                BaseClass anno = Class.forName(element.getParameters().get(i).asType().toString())
-                        .getAnnotation(BaseClass.class);
-                if (anno != null) {
-                    String randomName = UUID.randomUUID().toString().split("-")[0];
-                    var.addStatement("Object $L = $N.A()", randomName, param);
-                    methodParamNames.add(randomName);
-                } else {
-                    methodParamNames.add(param.name);
-                }
-            } catch (Exception ignored){
+            BaseClass anno = element.getParameters().get(i).asType().getAnnotation(BaseClass.class);
+            if (anno != null) {
+                String randomName = UUID.randomUUID().toString().split("-")[0];
+                var.addStatement("Object $L = $N.A()", randomName, param);
+                methodParamNames.add(randomName);
+            } else {
+                methodParamNames.add(param.name);
             }
         }
 

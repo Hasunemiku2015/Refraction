@@ -170,7 +170,7 @@ public class RefractionProcessor extends AbstractProcessor {
         List<String> methodParamNames = new ArrayList<>();
         for (int i=0; i<element.getParameters().size(); i++){
             ParameterSpec param = getInputParams(element).get(i);
-            if (element.getAnnotation(BaseClass.class) != null) {
+            if (element.getParameters().get(i).getAnnotation(BaseClass.class) != null) {
                 String randomName = UUID.randomUUID().toString().split("-")[0];
                 var.addStatement("Object $L = $N.A()", randomName, param);
                 methodParamNames.add(randomName);
@@ -183,7 +183,7 @@ public class RefractionProcessor extends AbstractProcessor {
         findMethodString.append("$T mth = clazz.getDeclaredMethod(a($S)");
         for (int i=0; i<element.getParameters().size(); i++) {
             ParameterSpec spec = getInputParams(element).get(i);
-            if (element.getAnnotation(BaseClass.class) != null) {
+            if (element.getParameters().get(i).getAnnotation(BaseClass.class) != null) {
                 findMethodString.append(String.format(",Class.forName(a(%s))",
                         element.getAnnotation(BaseClass.class).name()));
             } else {

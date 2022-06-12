@@ -10,8 +10,10 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Types;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("unused")
@@ -48,7 +50,8 @@ public class RefractionProcessor extends AbstractProcessor {
                             .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                             .addField(createBaseObjectField())
                             .addMethod(createConstructor())
-                            .addMethod(createMaker(interfaceName, generatedClassName, packageName));
+                            .addMethod(createMaker(interfaceName, generatedClassName, packageName))
+                            .addMethod(createUnWrapper());
 
                     for (Element subElement : element.getEnclosedElements()) {
                         if (!(subElement instanceof ExecutableElement)) continue;
@@ -110,6 +113,14 @@ public class RefractionProcessor extends AbstractProcessor {
                 .build();
     }
 
+    private MethodSpec createUnWrapper() {
+        return MethodSpec.methodBuilder("A")
+                .addModifiers(Modifier.PUBLIC)
+                .returns(TypeName.OBJECT)
+                .addStatement("return base")
+                .build();
+    }
+
     private MethodSpec createNewFieldAccessor(ExecutableElement element, String fieldName, String baseClassFullName) {
         TypeName returnClass = TypeName.get(element.getReturnType());
 
@@ -155,10 +166,29 @@ public class RefractionProcessor extends AbstractProcessor {
                 .beginControlFlow("try")
                 .addStatement("Class<?> clazz = Class.forName(a($S))", baseClassFullName);
 
+        // Unwrap if input is wrapper.
+        List<String> methodParamNames = new ArrayList<>();
+        for (int i=0; i<element.getParameters().size(); i++){
+            ParameterSpec param = getInputParams(element).get(i);
+            if (element.getAnnotation(BaseClass.class) != null) {
+                String randomName = UUID.randomUUID().toString().split("-")[0];
+                var.addStatement("Object $L = $N.A()", randomName, param);
+                methodParamNames.add(randomName);
+            } else {
+                methodParamNames.add(param.name);
+            }
+        }
+
         StringBuilder findMethodString = new StringBuilder();
         findMethodString.append("$T mth = clazz.getDeclaredMethod(a($S)");
-        for (ParameterSpec spec : getInputParams(element)) {
-            findMethodString.append(String.format(",%s.class", spec.type.toString()));
+        for (int i=0; i<element.getParameters().size(); i++) {
+            ParameterSpec spec = getInputParams(element).get(i);
+            if (element.getAnnotation(BaseClass.class) != null) {
+                findMethodString.append(String.format(",Class.forName(a(%s))",
+                        element.getAnnotation(BaseClass.class).name()));
+            } else {
+                findMethodString.append(String.format(",%s.class", spec.type.toString()));
+            }
         }
         findMethodString.append(")");
         var.addStatement(findMethodString.toString(), ClassName.get(java.lang.reflect.Method.class),
@@ -167,8 +197,8 @@ public class RefractionProcessor extends AbstractProcessor {
 
         StringBuilder invokeString = new StringBuilder();
         invokeString.append("Object returnValue = mth.invoke(base");
-        for (ParameterSpec spec : getInputParams(element)) {
-            invokeString.append(String.format(",%s", spec.name));
+        for (String paramName : methodParamNames) {
+            invokeString.append(String.format(",%s", paramName));
         }
         invokeString.append(")");
         var.addStatement(invokeString.toString());

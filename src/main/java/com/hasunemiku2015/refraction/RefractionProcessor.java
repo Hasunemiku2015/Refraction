@@ -188,7 +188,7 @@ public class RefractionProcessor extends AbstractProcessor {
 //            BaseClass anno = element.getParameters().get(i).asType().getAnnotation(BaseClass.class);
 //            if (anno != null) {
             if (false) {
-                findMethodString.append(String.format(",Class.forName(a(%s))", anno.name()));
+//                findMethodString.append(String.format(",Class.forName(a(%s))", anno.name()));
             } else {
                 findMethodString.append(String.format(",%s.class", spec.type.toString()));
             }

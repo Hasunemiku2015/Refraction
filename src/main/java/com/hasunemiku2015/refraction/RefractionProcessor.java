@@ -1,6 +1,7 @@
 package com.hasunemiku2015.refraction;
 
 import com.google.auto.service.AutoService;
+import com.hasunemiku2015.refraction.annotations.Abstracted;
 import com.hasunemiku2015.refraction.annotations.BaseClass;
 import com.hasunemiku2015.refraction.annotations.Field;
 import com.squareup.javapoet.*;
@@ -10,10 +11,13 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.Types;
+import javax.tools.Diagnostic;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("unused")
@@ -21,7 +25,6 @@ import java.util.stream.Collectors;
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 @AutoService(Processor.class)
 public class RefractionProcessor extends AbstractProcessor {
-
     private Filer filer;
     private Types typeUtils;
 
@@ -50,8 +53,8 @@ public class RefractionProcessor extends AbstractProcessor {
                             .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                             .addField(createBaseObjectField())
                             .addMethod(createConstructor())
-                            .addMethod(createMaker(interfaceName, generatedClassName, packageName))
-                            .addMethod(createUnWrapper());
+                            .addMethod(createUnWrapper())
+                            .addMethod(createMaker(interfaceName, generatedClassName, packageName));
 
                     for (Element subElement : element.getEnclosedElements()) {
                         if (!(subElement instanceof ExecutableElement)) continue;
@@ -103,6 +106,14 @@ public class RefractionProcessor extends AbstractProcessor {
                 .build();
     }
 
+    private MethodSpec createUnWrapper() {
+        return MethodSpec.methodBuilder("A")
+                .returns(TypeName.OBJECT)
+                .addModifiers(Modifier.PUBLIC)
+                .addStatement("return base")
+                .build();
+    }
+
     private MethodSpec createMaker(TypeName interfaceName, String generatedClassName, String packageName) {
         return MethodSpec.methodBuilder("create")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
@@ -110,14 +121,6 @@ public class RefractionProcessor extends AbstractProcessor {
                 .returns(interfaceName)
                 .addStatement("return new $T(baseObject)",
                         ClassName.get(packageName, generatedClassName))
-                .build();
-    }
-
-    private MethodSpec createUnWrapper() {
-        return MethodSpec.methodBuilder("A")
-                .addModifiers(Modifier.PUBLIC)
-                .returns(TypeName.OBJECT)
-                .addStatement("return base")
                 .build();
     }
 
@@ -166,33 +169,36 @@ public class RefractionProcessor extends AbstractProcessor {
                 .beginControlFlow("try")
                 .addStatement("Class<?> clazz = Class.forName(a($S))", baseClassFullName);
 
-        // Unwrap if input is wrapper.
-        List<String> methodParamNames = new ArrayList<>();
-        for (int i=0; i<element.getParameters().size(); i++){
-            ParameterSpec param = getInputParams(element).get(i);
-//            BaseClass anno = element.getParameters().get(i).asType().getAnnotation(BaseClass.class);
-//            if (anno != null) {
-            if (false) {
-                String randomName = UUID.randomUUID().toString().split("-")[0];
-                var.addStatement("Object $L = $N.A()", randomName, param);
-                methodParamNames.add(randomName);
+        StringBuilder findMethodString = new StringBuilder();
+        findMethodString.append("$T mth = clazz.getDeclaredMethod(a($S)");
+
+        // Unwrap if wrapper
+        List<ParameterSpec> inputParams = getInputParams(element);
+        List<String> methodInputParamNames = new ArrayList<>();
+
+        for (int i = 0; i < element.getParameters().size(); i++) {
+            ParameterSpec spec = inputParams.get(i);
+            if (element.getParameters().get(i).getAnnotation(Abstracted.class) == null) {
+                findMethodString.append(String.format(",%s.class", spec.type));
+                methodInputParamNames.add(spec.name);
             } else {
-                methodParamNames.add(param.name);
+                String varName = getRandomString(8);
+                String varClsName = getRandomString(8);
+                String varFieldName = getRandomString(8);
+
+                var.addStatement("Class<?> $L = Class.forName($L)", varClsName, spec.type.toString())
+                        .addStatement("$T $L = $L.getDeclaredField(\"base\")",
+                                ClassName.get(java.lang.reflect.Field.class), varFieldName, varClsName)
+                        .addStatement("$L.setAccessible(true)", varFieldName)
+                        .addStatement("Object $L = $L.get($N)", varName, varFieldName, spec);
+
+                findMethodString.append(String.format(
+                        ",Class.forName(a((BaseClass) Class.forName(%s).getAnnotation(BaseClass.class)).name())",
+                        spec.type));
+                methodInputParamNames.add(varName);
             }
         }
 
-        StringBuilder findMethodString = new StringBuilder();
-        findMethodString.append("$T mth = clazz.getDeclaredMethod(a($S)");
-        for (int i=0; i<element.getParameters().size(); i++) {
-            ParameterSpec spec = getInputParams(element).get(i);
-//            BaseClass anno = element.getParameters().get(i).asType().getAnnotation(BaseClass.class);
-//            if (anno != null) {
-            if (false) {
-                findMethodString.append(String.format(",Class.forName(a(%s))", anno.name()));
-            } else {
-                findMethodString.append(String.format(",%s.class", spec.type.toString()));
-            }
-        }
         findMethodString.append(")");
         var.addStatement(findMethodString.toString(), ClassName.get(java.lang.reflect.Method.class),
                         element.getSimpleName().toString())
@@ -200,9 +206,7 @@ public class RefractionProcessor extends AbstractProcessor {
 
         StringBuilder invokeString = new StringBuilder();
         invokeString.append("Object returnValue = mth.invoke(base");
-        for (String paramName : methodParamNames) {
-            invokeString.append(String.format(",%s", paramName));
-        }
+        methodInputParamNames.forEach((String name) -> invokeString.append(String.format(",%s", name)));
         invokeString.append(")");
         var.addStatement(invokeString.toString());
 
@@ -252,4 +256,29 @@ public class RefractionProcessor extends AbstractProcessor {
         }
         return packageName;
     }
+
+    private String getRandomString(int n) {
+        // chose a Character random from this String
+        String AlphaNumericString = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                + "abcdefghijklmnopqrstuvxyz";
+
+        // create StringBuffer size of AlphaNumericString
+        StringBuilder sb = new StringBuilder(n);
+
+        for (int i = 0; i < n; i++) {
+
+            // generate a random number between
+            // 0 to AlphaNumericString variable length
+            int index
+                    = (int) (AlphaNumericString.length()
+                    * Math.random());
+
+            // add Character one by one in end of sb
+            sb.append(AlphaNumericString
+                    .charAt(index));
+        }
+
+        return sb.toString();
+    }
 }
+

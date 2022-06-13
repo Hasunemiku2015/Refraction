@@ -14,7 +14,7 @@ public class RefractionEnvironmentVariableStore {
         }
     }
 
-    public static String Apply$$Key(String b){
+    public static String m_0039(String b){
         String c = b;
         for (String d : e.keySet()){
             c = b.replace(d, e.get(d));

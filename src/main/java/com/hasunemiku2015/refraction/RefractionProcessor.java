@@ -183,9 +183,16 @@ public class RefractionProcessor extends AbstractProcessor {
                 .beginControlFlow("try")
                 .addStatement("Class<?> clazz = Class.forName(m_0039($S))", baseClassFullName)
                 .addStatement("$T f = clazz.getDeclaredField(m_0039($S))", ClassName.get(java.lang.reflect.Field.class), fieldName)
-                .addStatement("f.setAccessible(true)")
-                .addStatement("f.set(base, $L)", inputParam.name)
-                .endControlFlow()
+                .addStatement("f.setAccessible(true)");
+
+        if (element.getParameters().get(0).getAnnotation(Abstracted.class) == null){
+            var.addStatement("f.set(base, $L)", inputParam.name);
+        } else {
+            String varName = abstractedPreprocessing(var, inputParam);
+            var.addStatement("f.set(base, $L)", varName);
+        }
+
+        var.endControlFlow()
                 .beginControlFlow("catch (Exception ex)")
                 .addStatement("ex.printStackTrace()")
                 .endControlFlow();
@@ -205,29 +212,17 @@ public class RefractionProcessor extends AbstractProcessor {
         StringBuilder findMethodString = new StringBuilder();
         findMethodString.append("$T mth = clazz.getDeclaredMethod(m_0039($S)");
 
-        // Unwrap if wrapper
         List<ParameterSpec> inputParams = getInputParams(element);
         List<String> methodInputParamNames = new ArrayList<>();
 
         for (int i = 0; i < element.getParameters().size(); i++) {
             ParameterSpec spec = inputParams.get(i);
+
             if (element.getParameters().get(i).getAnnotation(Abstracted.class) == null) {
                 findMethodString.append(String.format(",%s.class", spec.type));
                 methodInputParamNames.add(spec.name);
             } else {
-                String varName = getRandomString(8);
-                String varClsName = getRandomString(8);
-                String varFieldName = getRandomString(8);
-
-                String implClassCanonicalName = getPackageName(spec.type.toString()) +
-                        ".refraction.generated" + getClassSimpleName(spec.type.toString()) + "Implementation";
-
-                var.addStatement("Class<?> $L = Class.forName($S)", varClsName, implClassCanonicalName)
-                        .addStatement("$T $L = $L.getDeclaredField(\"base\")",
-                                ClassName.get(java.lang.reflect.Field.class), varFieldName, varClsName)
-                        .addStatement("$L.setAccessible(true)", varFieldName)
-                        .addStatement("Object $L = $L.get($N)", varName, varFieldName, spec);
-
+                String varName = abstractedPreprocessing(var, spec);
                 findMethodString.append(String.format(
                         ",Class.forName(m_0039(((%s) Class.forName(%s).getAnnotation(%s)).name()))", "BaseClass",
                         "\"" + spec.type + "\"", "baseClass"));
@@ -324,5 +319,22 @@ public class RefractionProcessor extends AbstractProcessor {
         }
 
         return sb.toString();
+    }
+
+    private String abstractedPreprocessing(MethodSpec.Builder var, ParameterSpec inputSpec){
+        String varName = getRandomString(8);
+        String varClsName = getRandomString(8);
+        String varFieldName = getRandomString(8);
+
+        String implClassCanonicalName = getPackageName(inputSpec.type.toString()) +
+                ".refraction.generated" + getClassSimpleName(inputSpec.type.toString()) + "Implementation";
+
+        var.addStatement("Class<?> $L = Class.forName($S)", varClsName, implClassCanonicalName)
+                .addStatement("$T $L = $L.getDeclaredField(\"base\")",
+                        ClassName.get(java.lang.reflect.Field.class), varFieldName, varClsName)
+                .addStatement("$L.setAccessible(true)", varFieldName)
+                .addStatement("Object $L = $L.get($N)", varName, varFieldName, inputSpec);
+
+        return varName;
     }
 }

@@ -219,7 +219,10 @@ public class RefractionProcessor extends AbstractProcessor {
                 String varClsName = getRandomString(8);
                 String varFieldName = getRandomString(8);
 
-                var.addStatement("Class<?> $L = Class.forName($S)", varClsName, spec.type.toString())
+                String implClassCanonicalName = getPackageName(spec.type.toString()) +
+                        ".refraction.generated" + getClassSimpleName(spec.type.toString()) + "Implementation";
+
+                var.addStatement("Class<?> $L = Class.forName($S)", varClsName, implClassCanonicalName)
                         .addStatement("$T $L = $L.getDeclaredField(\"base\")",
                                 ClassName.get(java.lang.reflect.Field.class), varFieldName, varClsName)
                         .addStatement("$L.setAccessible(true)", varFieldName)
@@ -286,6 +289,15 @@ public class RefractionProcessor extends AbstractProcessor {
         int lastDot = classFullName.lastIndexOf('.');
         if (lastDot > 0) {
             packageName = classFullName.substring(0, lastDot);
+        }
+        return packageName;
+    }
+
+    private String getClassSimpleName(String classFullName) {
+        String packageName = "";
+        int lastDot = classFullName.lastIndexOf('.');
+        if (lastDot > 0) {
+            packageName = classFullName.substring(lastDot);
         }
         return packageName;
     }

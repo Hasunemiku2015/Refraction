@@ -133,16 +133,26 @@ public class RefractionProcessor extends AbstractProcessor {
         StringBuilder constructorInvoke = new StringBuilder();
         constructorInvoke.append("Object obj = clazz.getDeclaredConstructor(");
         List<ParameterSpec> f_0001 = getInputParams(element);
+        List<String> inputParamName = new ArrayList<>();
         for (int i = 0; i < f_0001.size(); i++) {
             ParameterSpec spec = f_0001.get(i);
-            constructorInvoke.append(spec.type);
-            constructorInvoke.append(".class");
+            if (element.getParameters().get(i).getAnnotation(Abstracted.class) == null) {
+                constructorInvoke.append(spec.type);
+                constructorInvoke.append(".class");
+                inputParamName.add(spec.name);
+            } else {
+                String unpackObjName = abstractedPreprocessing(var, spec);
+                constructorInvoke.append(String.format(
+                        "Class.forName(m_0039(((%s) Class.forName(%s).getAnnotation(%s)).name()))", "BaseClass",
+                        "\"" + spec.type + "\"", "baseClass"));
+                inputParamName.add(unpackObjName);
+            }
             if (i != f_0001.size() - 1) constructorInvoke.append(",");
         }
         constructorInvoke.append(").newInstance(");
         for (int i = 0; i < f_0001.size(); i++) {
             ParameterSpec spec = f_0001.get(i);
-            constructorInvoke.append(spec.name);
+            constructorInvoke.append(inputParamName.get(i));
             if (i != f_0001.size() - 1) constructorInvoke.append(",");
         }
         constructorInvoke.append(")");
@@ -185,7 +195,7 @@ public class RefractionProcessor extends AbstractProcessor {
                 .addStatement("$T f = clazz.getDeclaredField(m_0039($S))", ClassName.get(java.lang.reflect.Field.class), fieldName)
                 .addStatement("f.setAccessible(true)");
 
-        if (element.getParameters().get(0).getAnnotation(Abstracted.class) == null){
+        if (element.getParameters().get(0).getAnnotation(Abstracted.class) == null) {
             var.addStatement("f.set(base, $L)", inputParam.name);
         } else {
             String varName = abstractedPreprocessing(var, inputParam);
@@ -321,7 +331,7 @@ public class RefractionProcessor extends AbstractProcessor {
         return sb.toString();
     }
 
-    private String abstractedPreprocessing(MethodSpec.Builder var, ParameterSpec inputSpec){
+    private String abstractedPreprocessing(MethodSpec.Builder var, ParameterSpec inputSpec) {
         String varName = getRandomString(8);
         String varClsName = getRandomString(8);
         String varFieldName = getRandomString(8);

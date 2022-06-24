@@ -283,6 +283,8 @@ public class RefractionProcessor extends AbstractProcessor {
             if (returnClass == TypeName.INT || returnClass == TypeName.DOUBLE || returnClass == TypeName.FLOAT ||
                     returnClass == TypeName.SHORT || returnClass == TypeName.LONG || returnClass == TypeName.BYTE) {
                 var.addStatement("return 0");
+            } else if (returnClass == TypeName.BOOLEAN) {
+                var.addStatement("return false");
             } else {
                 var.addStatement("return null");
             }

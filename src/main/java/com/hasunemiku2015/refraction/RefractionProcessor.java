@@ -240,7 +240,10 @@ public class RefractionProcessor extends AbstractProcessor {
                             ",Class.forName(m_0039(((%s) Class.forName(%s).getAnnotation(%s)).name()))", "BaseClass",
                             "\"" + spec.type + "\"", "baseClass"));
                 } else {
-                    findMethodString.append(String.format(",Class.forName(m_0039(%s))", "\"" + annotation.name() + "\""));
+                    String randomString = getRandomString(8);
+                    var.addStatement("Class<?> $L = Class.forName(m_0039($S))", randomString, annotation.name());
+
+                    findMethodString.append(",").append(randomString);
                 }
                 methodInputParamNames.add(varName);
             }

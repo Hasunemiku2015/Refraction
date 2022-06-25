@@ -228,14 +228,20 @@ public class RefractionProcessor extends AbstractProcessor {
         for (int i = 0; i < element.getParameters().size(); i++) {
             ParameterSpec spec = inputParams.get(i);
 
-            if (element.getParameters().get(i).getAnnotation(Abstracted.class) == null) {
+            Abstracted annotation = element.getParameters().get(i).getAnnotation(Abstracted.class);
+            if (annotation == null) {
                 findMethodString.append(String.format(",%s.class", spec.type));
                 methodInputParamNames.add(spec.name);
             } else {
                 String varName = abstractedPreprocessing(var, spec);
-                findMethodString.append(String.format(
-                        ",Class.forName(m_0039(((%s) Class.forName(%s).getAnnotation(%s)).name()))", "BaseClass",
-                        "\"" + spec.type + "\"", "baseClass"));
+
+                if (annotation.name().equals("")) {
+                    findMethodString.append(String.format(
+                            ",Class.forName(m_0039(((%s) Class.forName(%s).getAnnotation(%s)).name()))", "BaseClass",
+                            "\"" + spec.type + "\"", "baseClass"));
+                } else {
+                    findMethodString.append(String.format(",Class.forName(m_0039(%s))", annotation.name()));
+                }
                 methodInputParamNames.add(varName);
             }
         }
